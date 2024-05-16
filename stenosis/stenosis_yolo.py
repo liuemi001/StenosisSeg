@@ -4,7 +4,7 @@ from ultralytics import YOLO
 model = YOLO("yolov8n-seg.pt")  # load a pretrained model (recommended for training)
 
 # Use the model
-model.train(data="data.yaml", epochs=8, imgsz=512, device='mps')  # train the model
+model.train(data="data.yaml", epochs=2, imgsz=512, device='mps', conf=0, iou=0.7, show=True)  # train the model
 metrics = model.val()  # evaluate model performance on the validation set
 
 print(metrics)
