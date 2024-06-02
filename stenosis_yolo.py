@@ -2,9 +2,9 @@ from ultralytics import YOLO
 
 # Load a model
 model = YOLO("yolov8n-seg.pt")  # load a pretrained model (recommended for training)
-
+model = YOLO("runs/segment/train5/weights/last.pt")
 # Use the model
-model.train(data="data.yaml", epochs=8, imgsz=512, device='mps')  # train the model
+model.train(data="/srv/submission/stenosis/data.yaml", epochs=50, imgsz=512, conf=0.01, iou=0.99, device=0)  # train the model
 metrics = model.val()  # evaluate model performance on the validation set
 
 print(metrics)
