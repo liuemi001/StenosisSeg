@@ -151,7 +151,7 @@ class CustomImageDataset(Dataset):
         self.transform = transform
 
     def __len__(self):
-        return 1000
+        return 997
 
     def __getitem__(self, idx):
         img_name = str(idx + 1) + '.png'
@@ -166,6 +166,6 @@ class CustomImageDataset(Dataset):
         image = image / 255.0
 
         boxes, labels, masks = load_yolo_annotations(annotation_path, 224, 224)
-        targets = {'image_id': id, 'boxes': boxes, 'masks': masks, 'labels': labels}
+        targets = {'image_id': torch.tensor([idx + 1]), 'boxes': boxes, 'masks': masks, 'labels': labels}
 
         return image, targets

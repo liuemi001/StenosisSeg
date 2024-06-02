@@ -4,8 +4,8 @@ from torchvision import models
 from tqdm import tqdm
 from torchvision.models.detection.mask_rcnn import MaskRCNN_ResNet50_FPN_Weights
 
-DATA_DIR = 'datasets/stenosis/'
-
+DATA_DIR = '/srv/submission/stenosis/'
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def train():
     # Load data
@@ -17,12 +17,13 @@ def train():
     )
 
     # Load model
-    model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights=MaskRCNN_ResNet50_FPN_Weights.DEFAULT)    
+    model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights=MaskRCNN_ResNet50_FPN_Weights.DEFAULT)
+    model.to(device)    
     params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
 
     num_epochs = 1  # Define the number of epochs
-    save_every = 10   # Save checkpoint every 10 iterations
+    save_every = 100   # Save checkpoint every certain amount of iterations
 
     for epoch in range(num_epochs):
         print("### Epoch ", epoch + 1, "###")
@@ -30,6 +31,9 @@ def train():
         running_loss = 0.0
         iteration = 0
         for imgs, targets in tqdm(data_loader):
+            imgs = [img.to(device) for img in imgs]
+            targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+
             loss_dict = model(imgs, targets)
             # Put your training logic here
 
@@ -58,7 +62,6 @@ def train():
 
 
 def eval(): 
-
     # load model
     model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights=MaskRCNN_ResNet50_FPN_Weights.DEFAULT).eval()    
     params = [p for p in model.parameters() if p.requires_grad]
@@ -100,7 +103,6 @@ def eval():
                     'scores': output['scores'][topk_indices],
                     'masks': output['masks'][topk_indices]
                 }))
-
         break
 
     plot([all_outs[0]])
