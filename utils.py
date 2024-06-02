@@ -152,16 +152,13 @@ class CustomImageDataset(Dataset):
         self.transform = transform
 
     def __len__(self):
-        return 1000
+        return 997
 
     def __getitem__(self, idx):
         img_name = str(idx + 1) + '.png'
         ann_name = str(idx + 1) + '.txt'
         image_path = os.path.join(self.data_dir, 'train/images', img_name)  # Replace 'example.jpg' with your image file
         annotation_path = os.path.join(self.data_dir, 'train/labels', ann_name)  # Replace 'example.txt' with your annotation file
-        if not os.path.exists(image_path) or not os.path.exists(annotation_path):
-            warnings.warn(f"Image or annotation not found for index {idx + 1}. Skipping...")
-            return None, None
 
         image = Image.open(image_path).convert('RGB')
         image = image.resize((224, 224))
