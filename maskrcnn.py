@@ -57,9 +57,9 @@ def train():
                 save_checkpoint(model, optimizer, iteration, iteration_loss, filename=f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}_iter{iteration}.pth")
                 running_loss = 0
 
-    if iteration % save_every != 0:  # Check if there were remaining iterations after the last save
-        iteration_loss = running_loss / (iteration % save_every)
-        save_checkpoint(model, optimizer, iteration, iteration_loss, filename=f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}_final.pth")
+        if iteration % save_every != 0:  # Check if there were remaining iterations after the last save
+            iteration_loss = running_loss / (iteration % save_every)
+            save_checkpoint(model, optimizer, iteration, iteration_loss, filename=f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}_final.pth")
 
 
 def eval(): 
