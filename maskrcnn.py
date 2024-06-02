@@ -24,13 +24,13 @@ def train():
     optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
 
     num_epochs = 50  # Define the number of epochs
-    save_every = 100   # Save checkpoint every certain amount of iterations
+    save_every = 32   # Save checkpoint every certain amount of iterations
 
     for epoch in range(num_epochs):
         print("### Epoch ", epoch + 1, "###")
         model.train()
         running_loss = 0.0
-        iteration = 33
+        iteration = 0
         for imgs, targets in tqdm(data_loader):
             imgs = [img.to(device) for img in imgs]
             targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
@@ -54,12 +54,12 @@ def train():
 
             if iteration % save_every == 0:
                 iteration_loss = running_loss / save_every
-                save_checkpoint(model, optimizer, iteration, iteration_loss, filename=f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch}_iter{iteration}.pth")
+                save_checkpoint(model, optimizer, iteration, iteration_loss, filename=f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}_iter{iteration}.pth")
                 running_loss = 0
 
     if iteration % save_every != 0:  # Check if there were remaining iterations after the last save
         iteration_loss = running_loss / (iteration % save_every)
-        save_checkpoint(model, optimizer, iteration, iteration_loss, filename=f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch}_final.pth")
+        save_checkpoint(model, optimizer, iteration, iteration_loss, filename=f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}_final.pth")
 
 
 def eval(): 
