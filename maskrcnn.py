@@ -4,25 +4,27 @@ from torchvision import models
 from tqdm import tqdm
 from torchvision.models.detection.mask_rcnn import MaskRCNN_ResNet50_FPN_Weights
 
-DATA_DIR = 'datasets/stenosis/'
-
+DATA_DIR = '/srv/submission/stenosis/'
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def train():
     # Load data
+    batch_size = 16
     train_dataset = CustomImageDataset(DATA_DIR, split='train')
     data_loader = torch.utils.data.DataLoader(
         train_dataset,
-        batch_size=2,
+        batch_size=batch_size,
         collate_fn=lambda batch: tuple(zip(*batch)),
     )
 
     # Load model
-    model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights=MaskRCNN_ResNet50_FPN_Weights.DEFAULT)    
+    model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights=MaskRCNN_ResNet50_FPN_Weights.DEFAULT)
+    model.to(device)    
     params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
 
-    num_epochs = 1  # Define the number of epochs
-    save_every = 10   # Save checkpoint every 10 iterations
+    num_epochs = 50  # Define the number of epochs
+    save_every = 32   # Save checkpoint every certain amount of iterations
 
     for epoch in range(num_epochs):
         print("### Epoch ", epoch + 1, "###")
@@ -30,8 +32,9 @@ def train():
         running_loss = 0.0
         iteration = 0
         for imgs, targets in tqdm(data_loader):
-            if imgs is None or targets is None:
-                continue
+            imgs = [img.to(device) for img in imgs]
+            targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+
             loss_dict = model(imgs, targets)
             # Put your training logic here
 
@@ -49,12 +52,12 @@ def train():
 
             if iteration % save_every == 0:
                 iteration_loss = running_loss / save_every
-                save_checkpoint(model, optimizer, iteration, iteration_loss, filename=f"checkpoints/checkpoint_iter{iteration}")
+                save_checkpoint(model, optimizer, iteration, iteration_loss, filename=f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}_iter{iteration}.pth")
                 running_loss = 0
 
-    if iteration % save_every != 0:  # Check if there were remaining iterations after the last save
-        iteration_loss = running_loss / (iteration % save_every)
-        save_checkpoint(model, optimizer, iteration, iteration_loss, filename="checkpoints/final_model.pth")
+        if iteration % save_every != 0:  # Check if there were remaining iterations after the last save
+            iteration_loss = running_loss / (iteration % save_every)
+            save_checkpoint(model, optimizer, iteration, iteration_loss, filename=f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}_final.pth")
 
 
 def eval(checkpoint_file, conf=0.8, k=None, num_to_plot=1, to_plot=False): 
