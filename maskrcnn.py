@@ -30,6 +30,8 @@ def train():
         running_loss = 0.0
         iteration = 0
         for imgs, targets in tqdm(data_loader):
+            if imgs is None or targets is None:
+                continue
             loss_dict = model(imgs, targets)
             # Put your training logic here
 
@@ -63,7 +65,7 @@ def eval():
     model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights=MaskRCNN_ResNet50_FPN_Weights.DEFAULT).eval()    
     params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
-    load_checkpoint(model, optimizer, filename="C:/Users/emily/Year 2 Classes/ArterySeg/checkpoint_iter90")
+    load_checkpoint(model, optimizer, filename="checkpoints/checkpoint_iter30")
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
     # load data
