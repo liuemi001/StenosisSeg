@@ -198,3 +198,90 @@ class CustomImageDataset(Dataset):
         targets = {'image_id': torch.tensor([idx + 1]), 'boxes': boxes, 'masks': masks, 'labels': labels}
 
         return image, targets
+
+class PseudoSyntaxDataset(Dataset):
+    def __init__(self, data_dir, checkpoint_file, split='train', transform=None):
+        """
+        Args:
+            data_dir (string): Root directory with all the images and labels. 
+            split (string): 'train' or 'val' or 'test'
+            transform (callable, optional): Optional transform to be applied on a sample.
+        """
+        self.data_dir = data_dir
+        img_dir = os.path.join(data_dir, f'{split}/images')
+        self.image_filenames = [f for f in os.listdir(img_dir) if f.endswith('.png')]
+        self.split = split
+        self.transform = transform
+
+        # init model
+        model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights=MaskRCNN_ResNet50_FPN_Weights.DEFAULT).eval()
+        params = [p for p in model.parameters() if p.requires_grad]
+        optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
+        load_checkpoint(model, optimizer, filename=checkpoint_file)
+        self.model = model
+
+    def __len__(self):
+        return len(self.image_filenames)
+
+    def __getitem__(self, idx):
+        img_name = str(idx + 1) + '.png'
+        ann_name = str(idx + 1) + '.txt'
+        image_path = os.path.join(self.data_dir, f'{self.split}/images', img_name)  # Replace 'example.jpg' with your image file
+        annotation_path = os.path.join(self.data_dir, f'{self.split}/labels', ann_name)  # Replace 'example.txt' with your annotation file
+
+        image = Image.open(image_path).convert('RGB')
+        image = image.resize((224, 224))
+        image = pil_to_tensor(image)
+        image = image.to(torch.float32)
+        image = image / 255.0
+
+        boxes, labels, masks = eval(self.model, self.split, image)
+        targets = {'image_id': torch.tensor([idx + 1]), 'boxes': boxes, 'masks': masks, 'labels': labels}
+
+        return image, targets
+
+def pseudo_eval(model, image, split='val', conf=0.8, k=None, num_to_plot=1, to_plot=False):
+    # load model
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    model.to(device)
+    
+    all_outs = []
+    imgs = [image.to(device)]
+
+    with torch.no_grad():
+        # We only need imgs for inference
+        outputs = model(imgs)
+
+    # Process the outputs as needed
+    for i, output in enumerate(outputs):
+        output['masks'] = output['masks'].squeeze(1)
+
+        output['masks'][output['masks'] > conf] = 1
+        output['masks'][output['masks'] <= conf] = 0
+
+        if k is None:
+            all_outs.append((imgs[i], {
+                'boxes': output['boxes'],
+                'labels': output['labels'],
+                'scores': output['scores'],
+                'masks': output['masks']
+            }))
+            all_masks = output['masks']
+        else:
+            if k >= len(output['scores']):
+                all_outs.append((imgs[i], {
+                    'boxes': output['boxes'],
+                    'labels': output['labels'],
+                    'scores': output['scores'],
+                    'masks': output['masks']
+                }))
+                all_masks = output['masks']
+            else:
+                topk_scores, topk_indices = torch.topk(output['scores'], k=k, largest=True)
+                all_outs.append((imgs[i], {
+                        'boxes': output['boxes'][topk_indices],
+                        'labels': output['labels'][topk_indices],
+                        'scores': output['scores'][topk_indices],
+                        'masks': output['masks'][topk_indices]
+                    }))
+                all_masks = output['masks'][topk_indices]
