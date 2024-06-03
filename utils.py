@@ -17,6 +17,7 @@ from torchvision.transforms.v2 import functional as F
 import torch.nn as nn
 from torchvision.datasets import wrap_dataset_for_transforms_v2
 from torchvision.transforms.functional import pil_to_tensor
+from torchvision.models.detection.mask_rcnn import MaskRCNN_ResNet50_FPN_Weights
 
 import os
 import numpy as np
@@ -227,7 +228,6 @@ class PseudoSyntaxDataset(Dataset):
         img_name = str(idx + 1) + '.png'
         ann_name = str(idx + 1) + '.txt'
         image_path = os.path.join(self.data_dir, f'{self.split}/images', img_name)  # Replace 'example.jpg' with your image file
-        annotation_path = os.path.join(self.data_dir, f'{self.split}/labels', ann_name)  # Replace 'example.txt' with your annotation file
 
         image = Image.open(image_path).convert('RGB')
         image = image.resize((224, 224))
@@ -239,19 +239,22 @@ class PseudoSyntaxDataset(Dataset):
         targets = {'image_id': torch.tensor([idx + 1]), 'boxes': boxes, 'masks': masks, 'labels': labels}
 
         return image, targets
+    
 
-def pseudo_eval(model, image, split='val', conf=0.8, k=None, num_to_plot=1, to_plot=False):
+def pseudo_eval(model, image, split='val', conf=0.8, k=None):
     # load model
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     model.to(device)
     
-    all_outs = []
     imgs = [image.to(device)]
 
     with torch.no_grad():
         # We only need imgs for inference
         outputs = model(imgs)
 
+    boxes = []
+    masks = []
+    labels = []
     # Process the outputs as needed
     for i, output in enumerate(outputs):
         output['masks'] = output['masks'].squeeze(1)
@@ -259,29 +262,10 @@ def pseudo_eval(model, image, split='val', conf=0.8, k=None, num_to_plot=1, to_p
         output['masks'][output['masks'] > conf] = 1
         output['masks'][output['masks'] <= conf] = 0
 
-        if k is None:
-            all_outs.append((imgs[i], {
-                'boxes': output['boxes'],
-                'labels': output['labels'],
-                'scores': output['scores'],
-                'masks': output['masks']
-            }))
-            all_masks = output['masks']
-        else:
-            if k >= len(output['scores']):
-                all_outs.append((imgs[i], {
-                    'boxes': output['boxes'],
-                    'labels': output['labels'],
-                    'scores': output['scores'],
-                    'masks': output['masks']
-                }))
-                all_masks = output['masks']
-            else:
-                topk_scores, topk_indices = torch.topk(output['scores'], k=k, largest=True)
-                all_outs.append((imgs[i], {
-                        'boxes': output['boxes'][topk_indices],
-                        'labels': output['labels'][topk_indices],
-                        'scores': output['scores'][topk_indices],
-                        'masks': output['masks'][topk_indices]
-                    }))
-                all_masks = output['masks'][topk_indices]
+        boxes.append(output['boxes'])
+        masks.append(output['masks'])
+        labels.append(output['labels'])
+
+    boxes = torch.stack(boxes, dim=0)
+    labels = torch.tensor(labels, dtype=torch.int64)
+    masks = torch.stack(masks, axis=0)
