@@ -139,26 +139,54 @@ def load_checkpoint(model, optimizer, filename="checkpoint.pth"):
     return model, optimizer, epoch, loss
 
 
+def get_metrics(master_mask, target_mask):
+    # Ensure both masks are binary and have the same shape
+    assert master_mask.shape == target_mask.shape, "Masks should have the same shape"
+    
+    # Convert to binary (if not already)
+    master_mask = (master_mask > 0).to(torch.uint8)
+    target_mask = (target_mask > 0).to(torch.uint8)
+    
+    # Flatten the masks
+    master_mask = master_mask.view(-1)
+    target_mask = target_mask.view(-1)
+    
+    # Calculate True Positives (TP), False Positives (FP), and False Negatives (FN)
+    tp = torch.logical_and(master_mask, target_mask).sum().item()
+    fp = torch.logical_and(master_mask, torch.logical_not(target_mask)).sum().item()
+    fn = torch.logical_and(torch.logical_not(master_mask), target_mask).sum().item()
+    
+    return tp, fp, fn
+
+
+def compute_f1(tp, fp, fn):
+    precision = float(tp / (tp + fp + 1e-8))  # Adding a small epsilon to avoid division by zero
+    recall = float(tp / (tp + fn + 1e-8))  # Adding a small epsilon to avoid division by zero
+    f1_score = 2 * (precision * recall) / (precision + recall + 1e-8)  # Adding a small epsilon to avoid division by zero
+    return f1_score
+
 class CustomImageDataset(Dataset):
-    def __init__(self, data_dir, transform=None):
+    def __init__(self, data_dir, split='train', transform=None):
         """
         Args:
-            img_dir (string): Directory with all the images.
+            data_dir (string): Root directory with all the images and labels. 
+            split (string): 'train' or 'val' or 'test'
             transform (callable, optional): Optional transform to be applied on a sample.
         """
         self.data_dir = data_dir
-        img_dir = os.path.join(data_dir, 'train/images')
-        self.image_filenames = [f for f in os.listdir(img_dir) if f.endswith('.jpg')]
+        img_dir = os.path.join(data_dir, f'{split}/images')
+        self.image_filenames = [f for f in os.listdir(img_dir) if f.endswith('.png')]
+        self.split = split
         self.transform = transform
 
     def __len__(self):
-        return 997
+        return len(self.image_filenames)
 
     def __getitem__(self, idx):
         img_name = str(idx + 1) + '.png'
         ann_name = str(idx + 1) + '.txt'
-        image_path = os.path.join(self.data_dir, 'train/images', img_name)  # Replace 'example.jpg' with your image file
-        annotation_path = os.path.join(self.data_dir, 'train/labels', ann_name)  # Replace 'example.txt' with your annotation file
+        image_path = os.path.join(self.data_dir, f'{self.split}/images', img_name)  # Replace 'example.jpg' with your image file
+        annotation_path = os.path.join(self.data_dir, f'{self.split}/labels', ann_name)  # Replace 'example.txt' with your annotation file
 
         image = Image.open(image_path).convert('RGB')
         image = image.resize((224, 224))

@@ -9,8 +9,13 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def train():
     # Load data
+<<<<<<< HEAD
     batch_size = 4
     train_dataset = CustomImageDataset(DATA_DIR)
+=======
+    batch_size = 16
+    train_dataset = CustomImageDataset(DATA_DIR, split='train')
+>>>>>>> 425e984f69111b42f68f6e46013afe5fe6951654
     data_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=batch_size,
@@ -47,8 +52,6 @@ def train():
             loss_dict = model(imgs, targets)
             # Put your training logic here
 
-            print(f"{[img.shape for img in imgs] = }")
-            print(f"{[type(target) for target in targets] = }")
             for name, loss_val in loss_dict.items():
                 print(f"{name:<20}{loss_val:.3f}")
 
@@ -71,16 +74,19 @@ def train():
             save_checkpoint(model, optimizer, epoch, iteration, iteration_loss, filename=f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}_final.pth")
 
 
-def eval(): 
+def eval(checkpoint_file, conf=0.8, k=None, num_to_plot=1, to_plot=False): 
+
     # load model
     model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights=MaskRCNN_ResNet50_FPN_Weights.DEFAULT).eval()    
     params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
-    load_checkpoint(model, optimizer, filename="checkpoints/checkpoint_iter30")
+    load_checkpoint(model, optimizer, filename=checkpoint_file)
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
+    model.to(device)
+
     # load data
-    train_dataset = CustomImageDataset(DATA_DIR)
+    train_dataset = CustomImageDataset(DATA_DIR, 'val')
     data_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=2,
@@ -88,38 +94,63 @@ def eval():
     )
 
     all_outs = []
-    for imgs, _ in data_loader:  # We only need imgs for inference
+    all_tp, all_fp, all_fn = 0, 0, 0
+
+    for imgs, targets in tqdm(data_loader):  
         imgs = list(img.to(device) for img in imgs)
+        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+        print()
 
         with torch.no_grad():
+            # We only need imgs for inference
             outputs = model(imgs)
 
         # Process the outputs as needed
         for i, output in enumerate(outputs):
-            print(f"Image {i}:")
-            print(f"  Boxes: {output['boxes']}")
-            print(f"  Labels: {output['labels']}")
-            print(f"  Scores: {output['scores']}")
-            print(f"  Masks: {output['masks']}")
+    
             output['masks'] = output['masks'].squeeze(1)
 
-            output['masks'][output['masks'] > 0.5] = 1
-            output['masks'][output['masks'] <= 0.5] = 0
-            topk_scores, topk_indices = torch.topk(output['scores'], k=5, largest=True)
+            output['masks'][output['masks'] > conf] = 1
+            output['masks'][output['masks'] <= conf] = 0
 
-            all_outs.append((imgs[i], {
-                    'boxes': output['boxes'][topk_indices],
-                    'labels': output['labels'][topk_indices],
-                    'scores': output['scores'][topk_indices],
-                    'masks': output['masks'][topk_indices]
+            if k is None: 
+                all_outs.append((imgs[i], {
+                    'boxes': output['boxes'],
+                    'labels': output['labels'],
+                    'scores': output['scores'],
+                    'masks': output['masks']
                 }))
-        break
+                all_masks = output['masks']
+            else: 
+                topk_scores, topk_indices = torch.topk(output['scores'], k=k, largest=True)
 
-    plot([all_outs[0]])
+                all_outs.append((imgs[i], {
+                        'boxes': output['boxes'][topk_indices],
+                        'labels': output['labels'][topk_indices],
+                        'scores': output['scores'][topk_indices],
+                        'masks': output['masks'][topk_indices]
+                    }))
+                all_masks = output['masks'][topk_indices]
+            
+            # Get one single mask by doing pixel wise 'or' operation on all masks
+            master_mask = torch.any(all_masks.bool(), dim=0)
+            target_mask = torch.any(targets[i]['masks'].bool(), dim=0)
+            tp, fp, fn = get_metrics(master_mask, target_mask)
+            all_tp += tp
+            all_fp += fp
+            all_fn += fn
+    
+    print(f"TP: {all_tp}, FP: {all_fp}, FN: {all_fn}")
+    f1 = compute_f1(all_tp, all_fp, all_fn)
+    print(f"F1 Score: {f1}")
+        
+    if to_plot: 
+        plot([all_outs[:num_to_plot]])
 
 
 def main(): 
-    train()
+    #train()
+    eval("checkpoints/final_model.pth", conf=0.9, num_to_plot=5, k=3)
 
 
 if __name__ == '__main__':
