@@ -235,7 +235,7 @@ class PseudoSyntaxDataset(Dataset):
         image = image.to(torch.float32)
         image = image / 255.0
 
-        boxes, labels, masks = eval(self.model, self.split, image)
+        boxes, labels, masks = pseudo_eval(self.model, self.split, image)
         targets = {'image_id': torch.tensor([idx + 1]), 'boxes': boxes, 'masks': masks, 'labels': labels}
 
         return image, targets
