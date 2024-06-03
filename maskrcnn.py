@@ -69,6 +69,8 @@ def eval(checkpoint_file, conf=0.8, k=None, num_to_plot=1, to_plot=False):
     load_checkpoint(model, optimizer, filename=checkpoint_file)
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
+    model.to(device)
+
     # load data
     train_dataset = CustomImageDataset(DATA_DIR, 'val')
     data_loader = torch.utils.data.DataLoader(
@@ -82,6 +84,7 @@ def eval(checkpoint_file, conf=0.8, k=None, num_to_plot=1, to_plot=False):
 
     for imgs, targets in tqdm(data_loader):  
         imgs = list(img.to(device) for img in imgs)
+        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
         print()
 
         with torch.no_grad():
