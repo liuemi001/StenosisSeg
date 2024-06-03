@@ -17,6 +17,7 @@ from torchvision.transforms.v2 import functional as F
 import torch.nn as nn
 from torchvision.datasets import wrap_dataset_for_transforms_v2
 from torchvision.transforms.functional import pil_to_tensor
+from torchvision.models.detection.mask_rcnn import MaskRCNN_ResNet50_FPN_Weights
 
 import os
 import numpy as np
@@ -198,3 +199,73 @@ class CustomImageDataset(Dataset):
         targets = {'image_id': torch.tensor([idx + 1]), 'boxes': boxes, 'masks': masks, 'labels': labels}
 
         return image, targets
+
+class PseudoSyntaxDataset(Dataset):
+    def __init__(self, data_dir, checkpoint_file, split='train', transform=None):
+        """
+        Args:
+            data_dir (string): Root directory with all the images and labels. 
+            split (string): 'train' or 'val' or 'test'
+            transform (callable, optional): Optional transform to be applied on a sample.
+        """
+        self.data_dir = data_dir
+        img_dir = os.path.join(data_dir, f'{split}/images')
+        self.image_filenames = [f for f in os.listdir(img_dir) if f.endswith('.png')]
+        self.split = split
+        self.transform = transform
+
+        # init model
+        model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights=MaskRCNN_ResNet50_FPN_Weights.DEFAULT).eval()
+        params = [p for p in model.parameters() if p.requires_grad]
+        optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
+        load_checkpoint(model, optimizer, filename=checkpoint_file)
+        self.model = model
+
+    def __len__(self):
+        return len(self.image_filenames)
+
+    def __getitem__(self, idx):
+        img_name = str(idx + 1) + '.png'
+        ann_name = str(idx + 1) + '.txt'
+        image_path = os.path.join(self.data_dir, f'{self.split}/images', img_name)  # Replace 'example.jpg' with your image file
+
+        image = Image.open(image_path).convert('RGB')
+        image = image.resize((224, 224))
+        image = pil_to_tensor(image)
+        image = image.to(torch.float32)
+        image = image / 255.0
+
+        boxes, labels, masks = pseudo_eval(self.model, self.split, image)
+        targets = {'image_id': torch.tensor([idx + 1]), 'boxes': boxes, 'masks': masks, 'labels': labels}
+
+        return image, targets
+    
+
+def pseudo_eval(model, image, split='val', conf=0.8, k=None):
+    # load model
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    model.to(device)
+    
+    imgs = [image.to(device)]
+
+    with torch.no_grad():
+        # We only need imgs for inference
+        outputs = model(imgs)
+
+    boxes = []
+    masks = []
+    labels = []
+    # Process the outputs as needed
+    for i, output in enumerate(outputs):
+        output['masks'] = output['masks'].squeeze(1)
+
+        output['masks'][output['masks'] > conf] = 1
+        output['masks'][output['masks'] <= conf] = 0
+
+        boxes.append(output['boxes'])
+        masks.append(output['masks'])
+        labels.append(output['labels'])
+
+    boxes = torch.stack(boxes, dim=0)
+    labels = torch.tensor(labels, dtype=torch.int64)
+    masks = torch.stack(masks, axis=0)

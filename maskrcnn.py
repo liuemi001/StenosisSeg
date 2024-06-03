@@ -69,10 +69,10 @@ def train():
             save_checkpoint(model, optimizer, epoch, iteration, iteration_loss, filename=f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}_final.pth")
 
 
-def eval(checkpoint_file, conf=0.8, k=None, num_to_plot=1, to_plot=False): 
+def eval(checkpoint_file, split='val', conf=0.8, k=None, num_to_plot=1, to_plot=False):
 
     # load model
-    model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights=MaskRCNN_ResNet50_FPN_Weights.DEFAULT).eval()    
+    model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights=MaskRCNN_ResNet50_FPN_Weights.DEFAULT).eval()
     params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
     load_checkpoint(model, optimizer, filename=checkpoint_file)
@@ -81,17 +81,17 @@ def eval(checkpoint_file, conf=0.8, k=None, num_to_plot=1, to_plot=False):
     model.to(device)
 
     # load data
-    train_dataset = CustomImageDataset(DATA_DIR, 'val')
+    train_dataset = CustomImageDataset(DATA_DIR, split)
     data_loader = torch.utils.data.DataLoader(
         train_dataset,
-        batch_size=2,
+        batch_size=1,
         collate_fn=lambda batch: tuple(zip(*batch)),
     )
 
     all_outs = []
     all_tp, all_fp, all_fn = 0, 0, 0
 
-    for imgs, targets in tqdm(data_loader):  
+    for imgs, targets in tqdm(data_loader):
         imgs = list(img.to(device) for img in imgs)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
         print()
@@ -102,13 +102,13 @@ def eval(checkpoint_file, conf=0.8, k=None, num_to_plot=1, to_plot=False):
 
         # Process the outputs as needed
         for i, output in enumerate(outputs):
-    
+
             output['masks'] = output['masks'].squeeze(1)
 
             output['masks'][output['masks'] > conf] = 1
             output['masks'][output['masks'] <= conf] = 0
 
-            if k is None: 
+            if k is None:
                 all_outs.append((imgs[i], {
                     'boxes': output['boxes'],
                     'labels': output['labels'],
@@ -116,17 +116,25 @@ def eval(checkpoint_file, conf=0.8, k=None, num_to_plot=1, to_plot=False):
                     'masks': output['masks']
                 }))
                 all_masks = output['masks']
-            else: 
-                topk_scores, topk_indices = torch.topk(output['scores'], k=k, largest=True)
-
-                all_outs.append((imgs[i], {
-                        'boxes': output['boxes'][topk_indices],
-                        'labels': output['labels'][topk_indices],
-                        'scores': output['scores'][topk_indices],
-                        'masks': output['masks'][topk_indices]
+            else:
+                if k >= len(output['scores']):
+                    all_outs.append((imgs[i], {
+                        'boxes': output['boxes'],
+                        'labels': output['labels'],
+                        'scores': output['scores'],
+                        'masks': output['masks']
                     }))
-                all_masks = output['masks'][topk_indices]
-            
+                    all_masks = output['masks']
+                else:
+                    topk_scores, topk_indices = torch.topk(output['scores'], k=k, largest=True)
+                    all_outs.append((imgs[i], {
+                            'boxes': output['boxes'][topk_indices],
+                            'labels': output['labels'][topk_indices],
+                            'scores': output['scores'][topk_indices],
+                            'masks': output['masks'][topk_indices]
+                        }))
+                    all_masks = output['masks'][topk_indices]
+
             # Get one single mask by doing pixel wise 'or' operation on all masks
             master_mask = torch.any(all_masks.bool(), dim=0)
             target_mask = torch.any(targets[i]['masks'].bool(), dim=0)
@@ -134,18 +142,18 @@ def eval(checkpoint_file, conf=0.8, k=None, num_to_plot=1, to_plot=False):
             all_tp += tp
             all_fp += fp
             all_fn += fn
-    
+
     print(f"TP: {all_tp}, FP: {all_fp}, FN: {all_fn}")
     f1 = compute_f1(all_tp, all_fp, all_fn)
     print(f"F1 Score: {f1}")
-        
-    if to_plot: 
+
+    if to_plot:
         plot([all_outs[:num_to_plot]])
 
 
 def main(): 
     #train()
-    eval("checkpoints/final_model.pth", conf=0.9, num_to_plot=5, k=3)
+    eval("checkpoints/final_model.pth", spli='val', conf=0.8, k=None)
 
 
 if __name__ == '__main__':
