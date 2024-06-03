@@ -117,9 +117,10 @@ def plot(imgs, row_title=None, **imshow_kwargs):
     plt.tight_layout()
 
 
-def save_checkpoint(model, optimizer, epoch, loss=0, filename="checkpoint.pth"):
+def save_checkpoint(model, optimizer, epoch, iteration, loss, filename="checkpoint.pth"):
     checkpoint = {
         'epoch': epoch,
+        'iteration': iteration,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'loss': loss,
@@ -132,11 +133,10 @@ def load_checkpoint(model, optimizer, filename="checkpoint.pth"):
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     epoch = checkpoint['epoch']
-    loss = -1
-    if 'loss' in checkpoint:
-      loss = checkpoint['loss']
+    loss = checkpoint['loss']
+    # iteration = checkpoint['iteration']
     print(f"Checkpoint loaded from epoch {epoch} with loss {loss:.4f}")
-    return epoch, loss
+    return model, optimizer, epoch, loss
 
 
 class CustomImageDataset(Dataset):

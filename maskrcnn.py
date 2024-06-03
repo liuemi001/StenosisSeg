@@ -9,7 +9,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def train():
     # Load data
-    batch_size = 16
+    batch_size = 4
     train_dataset = CustomImageDataset(DATA_DIR)
     data_loader = torch.utils.data.DataLoader(
         train_dataset,
@@ -24,13 +24,22 @@ def train():
     optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
 
     num_epochs = 50  # Define the number of epochs
-    save_every = 32   # Save checkpoint every certain amount of iterations
+    save_every = 250   # Save checkpoint every certain amount of iterations
 
-    for epoch in range(num_epochs):
+    start_epoch = 0 # Check this!
+    start_iteration = 0
+    checkpoint_path = '' # Modify this to '' if no checkpoint
+    if checkpoint_path:
+        model, optimizer, _, _ = load_checkpoint(model, optimizer, checkpoint_path)
+    start_iteration = 0 # Just for this example where I haven't built out the entire harness
+
+    for epoch in range(start_epoch, num_epochs):
         print("### Epoch ", epoch + 1, "###")
         model.train()
         running_loss = 0.0
         iteration = 0
+        if epoch == start_epoch:
+            iteration = start_iteration
         for imgs, targets in tqdm(data_loader):
             imgs = [img.to(device) for img in imgs]
             targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
@@ -54,12 +63,12 @@ def train():
 
             if iteration % save_every == 0:
                 iteration_loss = running_loss / save_every
-                save_checkpoint(model, optimizer, iteration, iteration_loss, filename=f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}_iter{iteration}.pth")
+                save_checkpoint(model, optimizer, epoch, iteration, iteration_loss, filename=f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}_iter{iteration}.pth")
                 running_loss = 0
 
         if iteration % save_every != 0:  # Check if there were remaining iterations after the last save
             iteration_loss = running_loss / (iteration % save_every)
-            save_checkpoint(model, optimizer, iteration, iteration_loss, filename=f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}_final.pth")
+            save_checkpoint(model, optimizer, epoch, iteration, iteration_loss, filename=f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}_final.pth")
 
 
 def eval(): 
