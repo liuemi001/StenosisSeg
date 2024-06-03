@@ -9,13 +9,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def train():
     # Load data
-<<<<<<< HEAD
-    batch_size = 4
-    train_dataset = CustomImageDataset(DATA_DIR)
-=======
     batch_size = 16
     train_dataset = CustomImageDataset(DATA_DIR, split='train')
->>>>>>> 425e984f69111b42f68f6e46013afe5fe6951654
     data_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=batch_size,
