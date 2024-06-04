@@ -5,14 +5,24 @@ from tqdm import tqdm
 from torchvision.models.detection.mask_rcnn import MaskRCNN_ResNet50_FPN_Weights
 
 DATA_DIR = '/srv/submission/stenosis/'
+SYNTAX_DIR = '/srv/submission/syntax/'
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def train():
+def train(semi_super=False):
     # Load data
-    batch_size = 16
+    batch_size = 4
     train_dataset = CustomImageDataset(DATA_DIR, split='train')
+    concat_dataset = None
+    if semi_super:
+        semi_super_path = 'checkpoints/checkpoint_batch4_epoch50_iter250.pth'
+        pseudo_eval_dataset = PseudoSyntaxDataset(SYNTAX_DIR, semi_super_path, split='train')
+        concate_dataset = torch.utils.data.ConcatDataset([train_dataset, pseudo_eval_dataset])
+        print("Concat Successful")
+    else:
+        concate_dataset = train_dataset
+
     data_loader = torch.utils.data.DataLoader(
-        train_dataset,
+        concate_dataset,
         batch_size=batch_size,
         collate_fn=lambda batch: tuple(zip(*batch)),
     )
@@ -30,8 +40,7 @@ def train():
     start_iteration = 0
     checkpoint_path = '' # Modify this to '' if no checkpoint
     if checkpoint_path:
-        model, optimizer, _, _ = load_checkpoint(model, optimizer, checkpoint_path)
-    start_iteration = 0 # Just for this example where I haven't built out the entire harness
+        model, optimizer, start_epoch, start_iteration = load_checkpoint(model, optimizer, checkpoint_path)
 
     for epoch in range(start_epoch, num_epochs):
         print("### Epoch ", epoch + 1, "###")
@@ -61,16 +70,21 @@ def train():
 
             if iteration % save_every == 0:
                 iteration_loss = running_loss / save_every
-                save_checkpoint(model, optimizer, epoch, iteration, iteration_loss, filename=f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}_iter{iteration}.pth")
+                filename = f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}_iter{iteration}.pth"
+                if semi_super:
+                    filename = filename.replace('.pth', '_pseudo.pth')
+                save_checkpoint(model, optimizer, epoch, iteration, iteration_loss, filename=filename)
                 running_loss = 0
 
         if iteration % save_every != 0:  # Check if there were remaining iterations after the last save
             iteration_loss = running_loss / (iteration % save_every)
-            save_checkpoint(model, optimizer, epoch, iteration, iteration_loss, filename=f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}_final.pth")
+            filename = f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}_final.pth"
+            if semi_super:
+                filename = filename.replace('_final.pth', '_pseudo_final.pth')
+            save_checkpoint(model, optimizer, epoch, iteration, iteration_loss, filename=filename)
 
 
 def eval(checkpoint_file, split='val', conf=0.8, k=None, num_to_plot=1, to_plot=False):
-
     # load model
     model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights=MaskRCNN_ResNet50_FPN_Weights.DEFAULT).eval()
     params = [p for p in model.parameters() if p.requires_grad]
@@ -152,8 +166,8 @@ def eval(checkpoint_file, split='val', conf=0.8, k=None, num_to_plot=1, to_plot=
 
 
 def main(): 
-    #train()
-    eval("checkpoints/final_model.pth", spli='val', conf=0.8, k=None)
+    train(semi_super=True)
+    # eval("checkpoints/final_model.pth", split='val', conf=0.8, k=None)
 
 
 if __name__ == '__main__':

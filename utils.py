@@ -218,7 +218,7 @@ class PseudoSyntaxDataset(Dataset):
         model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights=MaskRCNN_ResNet50_FPN_Weights.DEFAULT).eval()
         params = [p for p in model.parameters() if p.requires_grad]
         optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
-        load_checkpoint(model, optimizer, filename=checkpoint_file)
+        model, optimizer, _, _ = load_checkpoint(model, optimizer, filename=checkpoint_file)
         self.model = model
 
     def __len__(self):
@@ -226,8 +226,8 @@ class PseudoSyntaxDataset(Dataset):
 
     def __getitem__(self, idx):
         img_name = str(idx + 1) + '.png'
-        ann_name = str(idx + 1) + '.txt'
         image_path = os.path.join(self.data_dir, f'{self.split}/images', img_name)  # Replace 'example.jpg' with your image file
+        # print(image_path)
 
         image = Image.open(image_path).convert('RGB')
         image = image.resize((224, 224))
@@ -235,7 +235,7 @@ class PseudoSyntaxDataset(Dataset):
         image = image.to(torch.float32)
         image = image / 255.0
 
-        boxes, labels, masks = pseudo_eval(self.model, self.split, image)
+        boxes, labels, masks = pseudo_eval(self.model, image, self.split)
         targets = {'image_id': torch.tensor([idx + 1]), 'boxes': boxes, 'masks': masks, 'labels': labels}
 
         return image, targets
@@ -243,10 +243,13 @@ class PseudoSyntaxDataset(Dataset):
 
 def pseudo_eval(model, image, split='val', conf=0.8, k=None):
     # load model
+    if not isinstance(image, torch.Tensor):
+        raise ValueError("The 'image' parameter should be a tensor.")
+
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     model.to(device)
     
-    imgs = [image.to(device)]
+    imgs = list(image.unsqueeze(0).to(device))
 
     with torch.no_grad():
         # We only need imgs for inference
@@ -266,6 +269,8 @@ def pseudo_eval(model, image, split='val', conf=0.8, k=None):
         masks.append(output['masks'])
         labels.append(output['labels'])
 
-    boxes = torch.stack(boxes, dim=0)
-    labels = torch.tensor(labels, dtype=torch.int64)
-    masks = torch.stack(masks, axis=0)
+    boxes = torch.stack(boxes, dim=0).reshape((-1, 4))
+    labels = torch.cat(labels, dim=0)
+    masks = torch.cat(masks, dim=0)
+
+    return boxes, labels, masks
