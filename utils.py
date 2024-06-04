@@ -215,7 +215,7 @@ class PseudoSyntaxDataset(Dataset):
         self.transform = transform
 
         # init model
-        model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights=MaskRCNN_ResNet50_FPN_Weights.DEFAULT).eval()
+        model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights=MaskRCNN_ResNet50_FPN_Weights.DEFAULT)
         params = [p for p in model.parameters() if p.requires_grad]
         optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
         model, optimizer, _, _ = load_checkpoint(model, optimizer, filename=checkpoint_file)
@@ -241,15 +241,17 @@ class PseudoSyntaxDataset(Dataset):
         return image, targets
     
 
-def pseudo_eval(model, image, split='val', conf=0.8, k=None):
+def pseudo_eval(model, image, split='val', conf=0.55, k=None):
     # load model
     if not isinstance(image, torch.Tensor):
         raise ValueError("The 'image' parameter should be a tensor.")
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     model.to(device)
+    model.eval()
     
-    imgs = list(image.unsqueeze(0).to(device))
+    imgs = []
+    imgs.append(image.to(device))
 
     with torch.no_grad():
         # We only need imgs for inference
@@ -261,16 +263,20 @@ def pseudo_eval(model, image, split='val', conf=0.8, k=None):
     # Process the outputs as needed
     for i, output in enumerate(outputs):
         output['masks'] = output['masks'].squeeze(1)
-
         output['masks'][output['masks'] > conf] = 1
         output['masks'][output['masks'] <= conf] = 0
+        masks.append(output['masks'])
 
         boxes.append(output['boxes'])
-        masks.append(output['masks'])
         labels.append(output['labels'])
 
     boxes = torch.stack(boxes, dim=0).reshape((-1, 4))
-    labels = torch.cat(labels, dim=0)
-    masks = torch.cat(masks, dim=0)
+    labels = torch.cat(labels).to(torch.int64)
+    masks = torch.cat(masks, dim=0).squeeze(1)
+    
+    # boxes = torch.stack(boxes, dim=0).reshape((-1, 4))
+    # labels = torch.cat(labels, dim=0)
+    # masks = torch.cat(masks, dim=0).squeeze(1)
+    # print(masks.shape)
 
     return boxes, labels, masks

@@ -12,11 +12,13 @@ def train(semi_super=False):
     # Load data
     batch_size = 4
     train_dataset = CustomImageDataset(DATA_DIR, split='train')
+    plot([train_dataset[0]])
     concat_dataset = None
     if semi_super:
         semi_super_path = 'checkpoints/checkpoint_batch4_epoch50_iter250.pth'
-        pseudo_eval_dataset = PseudoSyntaxDataset(SYNTAX_DIR, semi_super_path, split='train')
-        concat_dataset = torch.utils.data.ConcatDataset([train_dataset, pseudo_eval_dataset])
+        pseudo_eval_dataset = PseudoSyntaxDataset(SYNTAX_DIR, semi_super_path, split='val')
+        plot([pseudo_eval_dataset[0]])
+        concat_dataset = torch.utils.data.ConcatDataset([pseudo_eval_dataset, train_dataset])
         print("Concat Successful")
     else:
         concat_dataset = train_dataset
@@ -108,7 +110,6 @@ def eval(checkpoint_file, split='val', conf=0.8, k=None, num_to_plot=1, to_plot=
     for imgs, targets in tqdm(data_loader):
         imgs = list(img.to(device) for img in imgs)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-        print()
 
         with torch.no_grad():
             # We only need imgs for inference
