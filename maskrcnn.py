@@ -16,13 +16,13 @@ def train(semi_super=False):
     if semi_super:
         semi_super_path = 'checkpoints/checkpoint_batch4_epoch50_iter250.pth'
         pseudo_eval_dataset = PseudoSyntaxDataset(SYNTAX_DIR, semi_super_path, split='train')
-        concate_dataset = torch.utils.data.ConcatDataset([train_dataset, pseudo_eval_dataset])
+        concat_dataset = torch.utils.data.ConcatDataset([train_dataset, pseudo_eval_dataset])
         print("Concat Successful")
     else:
-        concate_dataset = train_dataset
+        concat_dataset = train_dataset
 
     data_loader = torch.utils.data.DataLoader(
-        concate_dataset,
+        concat_dataset,
         batch_size=batch_size,
         collate_fn=lambda batch: tuple(zip(*batch)),
     )
