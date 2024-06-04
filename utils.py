@@ -80,7 +80,7 @@ def plot(imgs, row_title=None, **imshow_kwargs):
 
     num_rows = len(imgs)
     num_cols = len(imgs[0])
-    _, axs = plt.subplots(nrows=num_rows, ncols=num_cols, squeeze=False)
+    fig, axs = plt.subplots(nrows=num_rows, ncols=num_cols, squeeze=False)
     for row_idx, row in enumerate(imgs):
         for col_idx, img in enumerate(row):
             boxes = None
@@ -116,6 +116,8 @@ def plot(imgs, row_title=None, **imshow_kwargs):
             axs[row_idx, 0].set(ylabel=row_title[row_idx])
 
     plt.tight_layout()
+    plt.show()
+    fig.savefig("plot.png")
 
 
 def save_checkpoint(model, optimizer, epoch, iteration, loss, filename="checkpoint.pth"):
@@ -227,7 +229,6 @@ class PseudoSyntaxDataset(Dataset):
     def __getitem__(self, idx):
         img_name = str(idx + 1) + '.png'
         image_path = os.path.join(self.data_dir, f'{self.split}/images', img_name)  # Replace 'example.jpg' with your image file
-        # print(image_path)
 
         image = Image.open(image_path).convert('RGB')
         image = image.resize((224, 224))
@@ -235,13 +236,13 @@ class PseudoSyntaxDataset(Dataset):
         image = image.to(torch.float32)
         image = image / 255.0
 
-        boxes, labels, masks = pseudo_eval(self.model, image, self.split)
+        boxes, labels, masks = pseudo_eval(self.model, image, split=self.split, conf=0.55)
         targets = {'image_id': torch.tensor([idx + 1]), 'boxes': boxes, 'masks': masks, 'labels': labels}
 
         return image, targets
     
 
-def pseudo_eval(model, image, split='val', conf=0.55, k=None):
+def pseudo_eval(model, image, split='train', conf=0.80, k=None):
     # load model
     if not isinstance(image, torch.Tensor):
         raise ValueError("The 'image' parameter should be a tensor.")

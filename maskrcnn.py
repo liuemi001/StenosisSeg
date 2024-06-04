@@ -12,12 +12,11 @@ def train(semi_super=False):
     # Load data
     batch_size = 4
     train_dataset = CustomImageDataset(DATA_DIR, split='train')
-    plot([train_dataset[0]])
     concat_dataset = None
     if semi_super:
         semi_super_path = 'checkpoints/checkpoint_batch4_epoch50_iter250.pth'
-        pseudo_eval_dataset = PseudoSyntaxDataset(SYNTAX_DIR, semi_super_path, split='val')
-        plot([pseudo_eval_dataset[0]])
+        pseudo_eval_dataset = PseudoSyntaxDataset(SYNTAX_DIR, semi_super_path, split='train')
+        plot([pseudo_eval_dataset[1]])
         concat_dataset = torch.utils.data.ConcatDataset([pseudo_eval_dataset, train_dataset])
         print("Concat Successful")
     else:
