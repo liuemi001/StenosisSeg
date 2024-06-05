@@ -48,7 +48,7 @@ def train(semi_super=False, other_dataset=False):
 
     start_epoch = 0 # Check this!
     start_iteration = 0
-    checkpoint_path = '' # Modify this to '' if no checkpoint
+    checkpoint_path = 'checkpoints/checkpoint_batch4_epoch3_iter750_pseudo_other.pth' # Modify this to '' if no checkpoint
     if checkpoint_path:
         model, optimizer, start_epoch, start_iteration = load_checkpoint(model, optimizer, checkpoint_path)
 
