@@ -6,9 +6,10 @@ from torchvision.models.detection.mask_rcnn import MaskRCNN_ResNet50_FPN_Weights
 
 DATA_DIR = '/srv/submission/stenosis/'
 SYNTAX_DIR = '/srv/submission/syntax/'
+DANILOV_DIR = '/srv/danilov/dataset/'
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def train(semi_super=False):
+def train(semi_super=False, other_dataset=False):
     # Load data
     batch_size = 4
     train_dataset = CustomImageDataset(DATA_DIR, split='train')
@@ -17,9 +18,17 @@ def train(semi_super=False):
         semi_super_path = 'checkpoints/checkpoint_batch4_epoch50_iter250.pth'
         pseudo_eval_dataset = PseudoSyntaxDataset(SYNTAX_DIR, semi_super_path, split='train')
         plot([pseudo_eval_dataset[1]])
-        concat_dataset = torch.utils.data.ConcatDataset([pseudo_eval_dataset, train_dataset])
+        concat_dataset = torch.utils.data.ConcatDataset([train_dataset, pseudo_eval_dataset])
         print("Concat Successful")
-    else:
+    
+    if other_dataset:
+        checkpoint = 'checkpoints/checkpoint_batch4_epoch50_iter250.pth'
+        danilov_dataset = DanilovDataset(DANILOV_DIR, checkpoint, split='train')
+        plot([danilov_dataset[1]])
+        concat_dataset = torch.utils.data.ConcatDataset([concat_dataset, danilov_dataset])
+        print("Danilov Successful")
+
+    if not semi_super and not other_dataset:
         concat_dataset = train_dataset
 
     data_loader = torch.utils.data.DataLoader(
@@ -34,7 +43,7 @@ def train(semi_super=False):
     params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
 
-    num_epochs = 50  # Define the number of epochs
+    num_epochs = 30  # Define the number of epochs
     save_every = 250   # Save checkpoint every certain amount of iterations
 
     start_epoch = 0 # Check this!
@@ -74,14 +83,19 @@ def train(semi_super=False):
                 filename = f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}_iter{iteration}.pth"
                 if semi_super:
                     filename = filename.replace('.pth', '_pseudo.pth')
+                if other_dataset:
+                    filename = filename.replace('.pth', '_other.pth')
                 save_checkpoint(model, optimizer, epoch, iteration, iteration_loss, filename=filename)
                 running_loss = 0
 
         if iteration % save_every != 0:  # Check if there were remaining iterations after the last save
             iteration_loss = running_loss / (iteration % save_every)
-            filename = f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}_final.pth"
+            filename = f"checkpoints/checkpoint_batch{batch_size}_epoch{epoch+1}.pth"
             if semi_super:
-                filename = filename.replace('_final.pth', '_pseudo_final.pth')
+                filename = filename.replace('.pth', '_pseudo.pth')
+            if other_dataset:
+                filename = filename.replace('.pth', '_other.pth')
+            filename = filename.replace('.pth', '_final.pth')
             save_checkpoint(model, optimizer, epoch, iteration, iteration_loss, filename=filename)
 
 
@@ -166,7 +180,7 @@ def eval(checkpoint_file, split='val', conf=0.8, k=None, num_to_plot=1, to_plot=
 
 
 def main(): 
-    train(semi_super=True)
+    train(semi_super=True, other_dataset=True)
     # eval("checkpoints/final_model.pth", split='val', conf=0.8, k=None)
 
 

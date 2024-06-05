@@ -281,3 +281,44 @@ def pseudo_eval(model, image, split='train', conf=0.80, k=None):
     # print(masks.shape)
 
     return boxes, labels, masks
+
+class DanilovDataset(Dataset):
+    def __init__(self, data_dir, checkpoint_file, stopping_num=1000, split='train', transform=None):
+        """
+        Args:
+            data_dir (string): Root directory with all the images and labels. 
+            split (string): 'train' or 'val' or 'test'
+            transform (callable, optional): Optional transform to be applied on a sample.
+        """
+        self.data_dir = data_dir
+        img_dir = data_dir
+        all_bmp_files = [f for f in os.listdir(img_dir) if f.endswith('.bmp')]
+        self.stopping = stopping_num
+        self.image_filenames = all_bmp_files[:self.stopping]
+        self.split = split
+        self.transform = transform
+        
+        # init model
+        model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights=MaskRCNN_ResNet50_FPN_Weights.DEFAULT)
+        params = [p for p in model.parameters() if p.requires_grad]
+        optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
+        model, optimizer, _, _ = load_checkpoint(model, optimizer, filename=checkpoint_file)
+        self.model = model
+
+    def __len__(self):
+        return len(self.image_filenames)
+
+    def __getitem__(self, idx):
+        img_name = str(idx + 1) + '.bmp'
+        image_path = os.path.join(self.data_dir, img_name)  # Replace 'example.jpg' with your image file
+
+        image = Image.open(image_path).convert('RGB')
+        image = image.resize((224, 224))
+        image = pil_to_tensor(image)
+        image = image.to(torch.float32)
+        image = image / 255.0
+
+        boxes, labels, masks = pseudo_eval(self.model, image, split=self.split, conf=0.55)
+        targets = {'image_id': torch.tensor([idx + 1]), 'boxes': boxes, 'masks': masks, 'labels': labels}
+
+        return image, targets
