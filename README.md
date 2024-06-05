@@ -1,6 +1,5 @@
 # StenosisSeg
-Tim Jing, Andy Wang, and Emily Liu
-CS 231N Project
+Tim Jing, Andy Wang, and Emily Liu's CS 231N Project
 
 ## Table of Contents
 
