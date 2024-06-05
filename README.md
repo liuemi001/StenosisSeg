@@ -1,2 +1,2 @@
-# ArterySeg
+# StenosisSeg
 cs231N project
