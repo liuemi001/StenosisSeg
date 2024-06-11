@@ -6,7 +6,6 @@ Tim Jing, Andy Wang, and Emily Liu's CS 231N Project
 - [Dependencies](#dependencies)
 - [Installation](#installation)
 - [Training](#training)
-- [Eval](#eval)
 
 ## Dependencies
 
@@ -36,10 +35,4 @@ To train the model, modify the directories in maskrcnn.py to where your dataset 
 ```bash
 python maskrcnn.py
 ```
-
-## Eval
-
-TODO:
-
-##
 
